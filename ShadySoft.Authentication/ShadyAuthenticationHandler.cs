@@ -77,7 +77,7 @@ namespace ShadySoft.Authentication
 
             var tokenString = _tokenService.EncodeTokenString(token);
 
-            SetTokenHeaders(tokenString);
+            SetTokenHeaders(token.UserId, tokenString, properties.IsPersistent);
         }
 
         protected override Task HandleSignOutAsync(AuthenticationProperties properties)
@@ -91,10 +91,12 @@ namespace ShadySoft.Authentication
             return new AuthenticationTicket(principal, ShadyAuthenticationDefaults.AuthenticationScheme);
         }
 
-        private void SetTokenHeaders(string tokenString)
+        private void SetTokenHeaders(string userId, string tokenString, bool isPersistent)
         {
             Response.Headers.Add("access-token", tokenString);
             Response.Headers.Add("token-type", ShadyAuthenticationDefaults.AuthenticationScheme);
+            Response.Headers.Add("persist-login", isPersistent.ToString());
+            Response.Headers.Add("user-id", userId);
         }
     }
 }
