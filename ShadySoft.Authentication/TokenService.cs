@@ -36,7 +36,14 @@ namespace ShadySoft.Authentication
             if (string.IsNullOrWhiteSpace(decryptedTokenString))
                 return null;
 
-            return JsonConvert.DeserializeObject<ShadyAuthenticationToken>(decryptedTokenString);
+            try
+            {
+                return JsonConvert.DeserializeObject<ShadyAuthenticationToken>(decryptedTokenString);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         public string EncodeTokenString(ShadyAuthenticationToken token)

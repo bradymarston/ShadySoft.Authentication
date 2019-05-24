@@ -59,7 +59,7 @@ namespace ShadySoft.Authentication
             if (token.SecurityStamp != user.SecurityStamp)
                 return AuthenticateResult.Fail("Token is no longer valid");
 
-            var ticket = await BuildTicketAsync(user);
+            var ticket = await BuildTicketAsync(user, token);
 
             Context.StoreAuthorizedUser(user);
 
@@ -72,6 +72,7 @@ namespace ShadySoft.Authentication
             {
                 UserId = user.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value,
                 SecurityStamp = user.Claims.First(c => c.Type == "AspNet.Identity.SecurityStamp").Value,
+                IsPersistent = properties.IsPersistent,
                 Issued = DateTime.UtcNow
             };
 
@@ -90,10 +91,16 @@ namespace ShadySoft.Authentication
             await _userManager.UpdateSecurityStampAsync(user);
         }
 
-        private async Task<AuthenticationTicket> BuildTicketAsync(TUser user)
+        private async Task<AuthenticationTicket> BuildTicketAsync(TUser user, ShadyAuthenticationToken token)
         {
             var principal = await _principalFactory.CreateAsync(user);
-            return new AuthenticationTicket(principal, ShadyAuthenticationDefaults.AuthenticationScheme);
+            var properties = new AuthenticationProperties
+            {
+                IsPersistent = token.IsPersistent,
+                IssuedUtc = token.Issued,
+                AllowRefresh = true
+            };
+            return new AuthenticationTicket(principal, properties, ShadyAuthenticationDefaults.AuthenticationScheme);
         }
 
         private void SetTokenHeaders(string userId, string tokenString, bool isPersistent)
