@@ -80,9 +80,14 @@ namespace ShadySoft.Authentication
             SetTokenHeaders(token.UserId, tokenString, properties.IsPersistent);
         }
 
-        protected override Task HandleSignOutAsync(AuthenticationProperties properties)
+        protected override async Task HandleSignOutAsync(AuthenticationProperties properties)
         {
-            throw new NotImplementedException();
+            var user = Context.GetAuthorizedUser<TUser>();
+
+            if (user == null)
+                return;
+
+            await _userManager.UpdateSecurityStampAsync(user);
         }
 
         private async Task<AuthenticationTicket> BuildTicketAsync(TUser user)
