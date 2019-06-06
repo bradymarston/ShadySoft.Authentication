@@ -42,7 +42,9 @@ namespace ShadySoft.Authentication.Extensions.DependencyInjection
 
             return services.AddAuthentication(ShadyAuthenticationDefaults.AuthenticationScheme)
                 .AddShady<TUser>()
-                .AddShady<TUser>(IdentityConstants.ApplicationScheme);
+                .AddShady<TUser>(IdentityConstants.ApplicationScheme)
+                .AddShady<TUser>(IdentityConstants.ExternalScheme)
+                .AddShady<TUser>(IdentityConstants.TwoFactorUserIdScheme);
         }
     }
 }
