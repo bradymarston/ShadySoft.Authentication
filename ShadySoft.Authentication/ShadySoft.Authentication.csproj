@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.0</TargetFramework>
+    <Authors>Brady Marston</Authors>
+    <Company>ShadySoft</Company>
+    <Version>0.1905.24.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
