@@ -89,7 +89,12 @@ namespace ShadySoft.Authentication
 
         protected override async Task HandleSignOutAsync(AuthenticationProperties properties)
         {
-            var user = Context.GetAuthorizedUser<TUser>();
+            var userId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (userId == null)
+                return;
+
+            var user = await _userManager.FindByIdAsync(userId);
 
             if (user == null)
                 return;
