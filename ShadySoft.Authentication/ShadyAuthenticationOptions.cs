@@ -1,13 +1,22 @@
 ﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
+using ShadySoft.Authentication.Models;
 using System;
 
 namespace ShadySoft.Authentication
 {
     public class ShadyAuthenticationOptions : AuthenticationSchemeOptions
     {
+        public ShadyAuthenticationOptions()
+        {
+            SlidingExpiration = true;
+            RegularExpireTimeSpan = TimeSpan.FromDays(2);
+            PersistentExpireTimeSpan = TimeSpan.FromDays(182);
+            PrincipalExpireTimespan = TimeSpan.FromMinutes(5);
+        }
+
         /// <summary>
-        /// If set this will be used by the CookieAuthenticationHandler for data protection.
+        /// If set this will be used by the SahdyAuthenticationHandler for data protection.
         /// </summary>
         public IDataProtectionProvider DataProtectionProvider { get; set; }
 
@@ -19,16 +28,26 @@ namespace ShadySoft.Authentication
 
 
         /// <summary>
-        /// <para>
-        /// Controls how much time the authentication ticket stored in the cookie will remain valid from the point it is created
-        /// The expiration information is stored in the protected cookie ticket. Because of that an expired cookie will be ignored
-        /// even if it is passed to the server after the browser should have purged it.
-        /// </para>
-        /// <para>
-        /// This is separate from the value of <seealso cref="CookieOptions.Expires"/>, which specifies
-        /// how long the browser will keep the cookie.
-        /// </para>
+        /// Controls how much time the authentication token will remain valid from the point it is created for a regular login.
         /// </summary>
-        public TimeSpan ExpireTimeSpan { get; set; }
+        public TimeSpan RegularExpireTimeSpan { get; set; }
+
+        /// <summary>
+        /// Controls how much time the authentication token will remain valid from the point it is created for a persistent login.
+        /// </summary>
+        public TimeSpan PersistentExpireTimeSpan { get; set; }
+
+        /// <summary>
+        /// Controls how much time the claims principal will remain valid from the point it is created.
+        /// If expired, the ticket will be refreshed as long as the containing token has not expired.
+        /// </summary>
+        public TimeSpan PrincipalExpireTimespan { get; set; }
+
+        /// <summary>
+        /// The ShadyAuthenticationTokenDataFormat is used to protect and unprotect the identity and other properties which are stored in the
+        /// cookie value. If not provided one will be created using <see cref="DataProtectionProvider"/>.
+        /// </summary>
+        public ISecureDataFormat<ShadyAuthenticationToken> ShadyAuthenticationTokenDataFormat { get; set; }
+
     }
 }

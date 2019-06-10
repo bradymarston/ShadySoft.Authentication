@@ -38,13 +38,25 @@ namespace ShadySoft.Authentication.Extensions.DependencyInjection
         public static AuthenticationBuilder AddShadyAuthentication<TUser>(this IServiceCollection services)
             where TUser : IdentityUser
         {
-            services.AddScoped<TokenService>();
+            return AddShadyAuthentication<TUser>(services, _ => { });
+        }
 
+        public static AuthenticationBuilder AddShadyAuthentication<TUser>(this IServiceCollection services, Action<ShadyAuthenticationOptions> configureOptions)
+            where TUser : IdentityUser
+        {
             return services.AddAuthentication(ShadyAuthenticationDefaults.AuthenticationScheme)
-                .AddShady<TUser>()
-                .AddShady<TUser>(IdentityConstants.ApplicationScheme)
-                .AddShady<TUser>(IdentityConstants.ExternalScheme)
-                .AddShady<TUser>(IdentityConstants.TwoFactorUserIdScheme);
+                .AddShady<TUser>(configureOptions)
+                .ForwardScheme(IdentityConstants.ApplicationScheme, ShadyAuthenticationDefaults.AuthenticationScheme)
+                .ForwardScheme(IdentityConstants.ExternalScheme, ShadyAuthenticationDefaults.AuthenticationScheme)
+                .ForwardScheme(IdentityConstants.TwoFactorUserIdScheme, ShadyAuthenticationDefaults.AuthenticationScheme);
+        }
+
+        public static AuthenticationBuilder ForwardScheme(this AuthenticationBuilder authBuilder, string schemeToForward, string targetScheme)
+        {
+            return authBuilder.AddPolicyScheme(schemeToForward, schemeToForward, options =>
+            {
+                options.ForwardDefault = targetScheme;
+            });
         }
     }
 }

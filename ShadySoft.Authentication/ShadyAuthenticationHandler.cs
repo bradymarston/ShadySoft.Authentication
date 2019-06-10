@@ -16,7 +16,6 @@ namespace ShadySoft.Authentication
     public class ShadyAuthenticationHandler<TUser> : SignInAuthenticationHandler<ShadyAuthenticationOptions>
         where TUser : IdentityUser
     {
-        private readonly TokenService _tokenService;
         private readonly UserManager<TUser> _userManager;
         private readonly IUserClaimsPrincipalFactory<TUser> _principalFactory;
 
@@ -25,18 +24,18 @@ namespace ShadySoft.Authentication
             ILoggerFactory logger,
             UrlEncoder encoder,
             ISystemClock clock,
-            TokenService tokenService,
             UserManager<TUser> userManager,
             IUserClaimsPrincipalFactory<TUser> principalFactory)
             : base(options, logger, encoder, clock)
         {
-            _tokenService = tokenService;
             _userManager = userManager;
             _principalFactory = principalFactory;
         }
 
         protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
         {
+            var refreshedToken = false;
+
             if (!Request.Headers.ContainsKey("Authorization"))
                 return AuthenticateResult.NoResult();
 
@@ -48,37 +47,44 @@ namespace ShadySoft.Authentication
             if (headerValue.Scheme != ShadyAuthenticationDefaults.AuthenticationScheme)
                 return AuthenticateResult.NoResult();
 
-            var token = _tokenService.DecodeTokenString(headerValue.Parameter);
+            var token = Options.ShadyAuthenticationTokenDataFormat.Unprotect(headerValue.Parameter);
             if (token is null)
                 return AuthenticateResult.Fail("Invalid authentication header");
 
-            var user = await _userManager.FindByIdAsync(token.UserId);
-            if (user is null)
-                return AuthenticateResult.Fail("User in authentication header cannot be found");
+            if (token.ExpiresUtc < DateTime.UtcNow)
+                return AuthenticateResult.Fail("Token is expired.");
 
-            if (token.SecurityStamp != user.SecurityStamp)
-                return AuthenticateResult.Fail("Token is no longer valid");
+            if (token.ExpiresUtc - DateTime.UtcNow < DateTime.UtcNow - token.IssuedUtc && Options.SlidingExpiration)
+            {
+                RefreshTokenExpirations(token);
+                refreshedToken = true;
+            }
 
-            var ticket = await BuildTicketAsync(user, token);
+            if (token.PrincipalExpiresUtc < DateTime.UtcNow)
+            {
+                try
+                {
+                    await RebuildPrincipleAsync(token);
+                }
+                catch (Exception e)
+                {
+                    return AuthenticateResult.Fail(e);
+                }
 
-            Context.StoreAuthorizedUser(user);
+                refreshedToken = true;
+            }
+
+            if (refreshedToken)
+                SetTokenHeaders(token);
+
+            var ticket = await BuildTicketAsync(token.Principal, token);
 
             return AuthenticateResult.Success(ticket);
         }
 
         protected override async Task HandleSignInAsync(ClaimsPrincipal user, AuthenticationProperties properties)
         {
-            var token = new ShadyAuthenticationToken
-            {
-                UserId = user.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value,
-                SecurityStamp = user.Claims.First(c => c.Type == "AspNet.Identity.SecurityStamp").Value,
-                IsPersistent = properties.IsPersistent,
-                Issued = DateTime.UtcNow
-            };
-
-            var tokenString = _tokenService.EncodeTokenString(token);
-
-            SetTokenHeaders(token.UserId, tokenString, properties.IsPersistent);
+            SetTokenHeaders(new ShadyAuthenticationToken(user, Options, properties.IsPersistent));
         }
 
         protected override async Task HandleSignOutAsync(AuthenticationProperties properties)
@@ -91,24 +97,48 @@ namespace ShadySoft.Authentication
             await _userManager.UpdateSecurityStampAsync(user);
         }
 
-        private async Task<AuthenticationTicket> BuildTicketAsync(TUser user, ShadyAuthenticationToken token)
+        private async Task<AuthenticationTicket> BuildTicketAsync(ClaimsPrincipal principal, ShadyAuthenticationToken token)
         {
-            var principal = await _principalFactory.CreateAsync(user);
             var properties = new AuthenticationProperties
             {
                 IsPersistent = token.IsPersistent,
-                IssuedUtc = token.Issued,
-                AllowRefresh = true
+                IssuedUtc = token.IssuedUtc,
+                AllowRefresh = Options.SlidingExpiration
             };
             return new AuthenticationTicket(principal, properties, ShadyAuthenticationDefaults.AuthenticationScheme);
         }
 
-        private void SetTokenHeaders(string userId, string tokenString, bool isPersistent)
+        private void SetTokenHeaders(ShadyAuthenticationToken token)
         {
-            Response.Headers.Add("access-token", tokenString);
+            Response.Headers.Add("access-token", Options.ShadyAuthenticationTokenDataFormat.Protect(token));
             Response.Headers.Add("token-type", ShadyAuthenticationDefaults.AuthenticationScheme);
-            Response.Headers.Add("persist-login", isPersistent.ToString());
-            Response.Headers.Add("user-id", userId);
+            Response.Headers.Add("persist-login", token.IsPersistent.ToString());
+            Response.Headers.Add("user-id", token.Principal.FindFirstValue(ClaimTypes.NameIdentifier));
+        }
+
+        private void RefreshTokenExpirations(ShadyAuthenticationToken token)
+        {
+            var validPeriod = token.ExpiresUtc - token.IssuedUtc;
+            token.IssuedUtc = DateTime.UtcNow;
+            token.ExpiresUtc = DateTime.UtcNow + validPeriod;
+        }
+
+        private async Task RebuildPrincipleAsync(ShadyAuthenticationToken token)
+        {
+            var tokenUserId = token.Principal.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _userManager.FindByIdAsync(tokenUserId);
+            if (user is null)
+                throw new Exception("User in principal could not be found");
+
+            var principalSecurityStamp = token.Principal.FindFirstValue("AspNet.Identity.SecurityStamp");
+            if (principalSecurityStamp != user.SecurityStamp)
+                throw new Exception("User's security stamp has changed since principal was created");
+
+            token.Principal = await _principalFactory.CreateAsync(user);
+
+            var validPeriod = token.PrincipalExpiresUtc - token.PrincipalIssuedUtc;
+            token.PrincipalIssuedUtc = DateTime.UtcNow;
+            token.PrincipalExpiresUtc = DateTime.UtcNow + validPeriod;
         }
     }
 }
