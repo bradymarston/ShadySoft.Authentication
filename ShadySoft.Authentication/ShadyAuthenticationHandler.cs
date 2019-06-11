@@ -2,7 +2,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using ShadySoft.Authentication.Extensions.Context;
 using ShadySoft.Authentication.Models;
 using System;
 using System.Linq;
